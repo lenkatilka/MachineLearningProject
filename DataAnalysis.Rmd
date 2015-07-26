@@ -1,0 +1,83 @@
+---
+output: html_document
+---
+## Analysis of The Weight Lifting Exercise Dataset
+
+In this project, we analyze the  Weight Lifting Exercise Dataset. We use the machine learning algorithm to classify the type of the motion during exercise. The analysis is composed of the following parts:
+
+* Cleaning Data
+* Partitioning Training data into the train part on which we build model and test data used for additional cross validation
+* The model fit on the data is a classification tree based on the forest tree algorithm which automatically cross-validates itself
+* The out-of-sample error is estimated
+* The fit is used to predict the outcome for the test data given from assignment
+
+### Cleaning Data
+Here we clean the training/testing data in the following way:
+
+(1) throw away all the columns with the factor variables (this way we get rid of columns with empty entries and those containing #DIV/0!)
+
+(2) throw away all the columns with more than 10 000 NA values (accidentally we end up with columns with no NA values, so no additional cleaning is needed)
+
+```{r, cache=TRUE}
+  library(caret)
+  TrainData<-read.csv("trainData.csv")
+  TestData<-read.csv("testData.csv")
+## find which variables are factor variables - this way we get rid of the empty entries and entries lihe #DIV/0! is we do not include factor variables
+  is.fact<-sapply(TrainData,is.factor)
+  TrainDataDummy<-TrainData[,!is.fact] ## take only non-factor variebles and connect with the classification column 
+  TestDataDummy<-TestData[,!is.fact] ## take only variables with less than 10000 NA values 
+  na_vals<-sapply(TrainDataDummy,function(x)sum(is.na(x))>10000)
+  TrainDataDummy<-TrainDataDummy[,!na_vals]
+  TestDataDummy<-TestDataDummy[,!na_vals]
+  TrainDataDummy<-cbind(TrainData$classe,TrainDataDummy[,2:ncol(TrainDataDummy)])#get rid of variable "X" and add variable "classe"
+  names(TrainDataDummy)[1]<-"classe" ## assign name "classe" to variable with classe data
+  TestDataDummy<-TestDataDummy[,2:ncol(TestDataDummy)] # get rid of variable "X"
+```
+
+### Data Partitioning
+Training data is further partitioned into the train subset on which we fit the model and testing subset for the out-of-sample error estimate and for additional cross-validation. The training subset is 70% of the randomly chosen training data, the other 30% is the testing subset.
+
+```{r,cache=TRUE}
+Train<-createDataPartition(TrainDataDummy$classe,p=0.7,list=F)
+TestfromTrain<-TrainDataDummy[-Train,]
+Train<-TrainDataDummy[Train,]
+```
+
+### Model Fitting & Error Estimate
+The model fitted is the classification tree. We use the tree forest algorithm with 10 trees - we find that the accuracy is very high and therefore we do not need more than 10 random trees to accurately classify the motion based on the data provided.
+
+```{r,cache=TRUE}
+fit<-train(classe~.,method="rf",ntree=10,data=Train)
+```
+
+From the confusion matrix we see that the error rate is very small (around 1%).
+
+```{r, cache=TRUE}
+fit$finalModel ## Summary of the model, the accuracy is high
+```
+
+### Out-of-Sample Error Estimate
+Here we compute the misclassification error on the test data created from a 30% random sample out of the training set: we compare the real classification and classification predicted from our model. 
+
+```{r, cache=TRUE}
+## Cross validation on the TestfromTrain data that were randomly slected from the training data
+prediction<-predict(fit,TestfromTrain)
+misClass<-function(values, prediction){sum(values!=prediction)/length(values)} # computing the ration of misclassifications
+crossValidError<-misClass(TestfromTrain$classe,prediction)
+```
+
+
+
+The ratio of the miclassified data is `r crossValidError`. This means that approximatelly `r crossValidError*100` % of the data will be misclassified (the error estimate from the summary of fit is a bit higher, around 1%).
+
+### Prediciton for The Test Set (from assignment)
+Finally, we use the 20 test data cases from the assignment to get the answers/classification of the test data that were submitted as a part of the project (all answers were correct)
+
+```{r,cache=TRUE}
+prediction<-predict(fit,TestDataDummy)
+answers<-as.character(prediction)
+```
+
+The following classification was (correctly) predicted for the test set:
+
+`r answers`
